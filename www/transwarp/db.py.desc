@@ -1,0 +1,91 @@
+	#工具
+	^
+	|--class Dict(dict)
+	|	#简单的dict，但是支持
+	|		#1、支持通过属性访问，即以 x.y 方式来访问 key,value
+	|		#2、支持 Dict(iterable,iterable)方式进行初始化,会自动一一对应生成dict
+	|
+	|--def next_id()
+	|	#生成唯一id, 由【时间戳】+【UUID】组成
+	|
+	|--def _profilling(start, sql='')
+		#用于剖析sql的执行时间
+
+	#核心子模块
+	^
+	|--class _DbCtx(threading.local)	#实例：_db_ctx
+	|	|#数据库连接的上下文对象, 是 db模块的核心对象, 负责从数据库获取和释放连接
+	|	|->self.connection 保存有某个数据库的惰性连接, Eg. self.connection = _LasyConnection()
+	|	|
+	|	class _LasyConnection	#实例：_db_ctx.connection
+	|		|#Mysql数据库的惰性连接对象
+	|		|->#封装有数据库操作相关功能
+	|			|->def cursor()		#获取 cursor 对象
+	|			|->def commit()		#数据库 commit
+	|			|->def rollback()	#数据库 rollback
+	|			|->def cleanup()	#关闭连接并清理	
+	|
+	|--class _TransactionCtx()	#事务上下文对象，支持 with 操作
+	|			|
+	|			|->	def __enter__	#每进入一层事务(嵌套),则 self.trans++; 若是初次进入，则调用 _db_ctx.init()进行初始化	
+	|			|-> def __exit__	#每退出一层事务(嵌套),则 self.trans--; 若是
+	|			
+	|--class _ConnectionCtx()	#数据库连接的上下文对象，目的是：自动获取和释放连接 with
+				|
+				|-> def __enter__	#调用 _db_ctx.is_init() 判断连接是否已初始化, 若无则调用 _db_ctx.init() 初始化连接, 并标记 clean 标志
+				|-> def __exit__	#若已标记 clean 标志, 则调用 _db_ctx.cleanup() 来清理(关闭)连接
+		
+	
+	#package db.py		#db模块提供的public方法
+	^
+	|
+	|--def create_engine(...)		#初始化数据库配置，为 _Engine的实例engine 初始化
+	|	^
+	|	|--class _Engine			#数据库引擎对象,保存 数据库连接 的创建函数
+	|			#实例: engine
+	|
+	|--def update(sql, *args)
+	|	#直接调用 _update(...)
+	|	|						 |->	#由class _ConnectionCtx()提供 with 功能
+	|	|						 |->	def __enter__	#判断是否需要调用 _db_ctx.init() 来获取一个惰性连接对象
+	|	|						 |->	def __exit__	#调用 _db_ctx.cleanup() 释放连接
+	|	|  @with_connection -----/
+	|	|--def _update(sql, *args)	#从 _db_ctx.connection.cursor() 获取cursor，并执行sql语句
+	|								#若非事务，则显示调用commit
+	|		
+	|
+	|--def insert(table, **kw)
+	|	#根据 **kw 拼装insert语句，再调用 _update(...)
+	|	|
+	|	|  @with_connection
+	|	|--def _update(sql, *args)
+	|
+	|
+	|  @with_connection
+	|--def select(sql, *args)
+	|	|							#直接调用 _select(sql, False, *args)
+	|	|
+	|	|@with_connection
+	|	def select_int(sql, *args)	#执行select，返回一个结果，且仅含一个数值
+	|	|							#调用并返回 _select(sql, True, *args).values()[0]
+	|	|
+	|	@with_connection
+	|	def select_one(sql, *args)	#执行select，仅返回一个结果
+	|	| 							#直接调用 _select(sql, True, *args)
+	|	|
+	|	def _select(sql, first, *args)	#执行SQL，返回一个结果 或者多个结果组成的列表
+	|									#从 _db_ctx.connection.cursor() 获取cursor，并执行sql语句
+	|									#根据返回的结果，组装成固定格式返回
+	| 
+	|  
+	|--def transaction()	#返回一个事务的上下文对象实例, 用于 with 语法
+	|	|#return _TransactionCtx
+	|	|--def with_transaction(func)	# 方便事务处理的 with 语法糖
+	|		#with _TransactionCtx():
+	|		#	xxx;
+	|	
+	|--def connection()		#返回一个数据库连接的上下文对象实例，用于 with 语法
+		|#return _ConnectionCtx()
+		|--def with_connection(func)	# 方便数据库连接的 with 语法糖
+			#with _ConnectionCtx():
+			#	xxx;

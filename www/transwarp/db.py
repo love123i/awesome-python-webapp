@@ -3,13 +3,52 @@
 __author__ = 'YJX'
 __data__ = 2016 / 6 / 13
 
+'''
+设计db模块的原因：
+  1. 更简单的操作数据库
+      一次数据访问：   数据库连接 => 游标对象 => 执行SQL => 处理异常 => 清理资源。
+      db模块对这些过程进行封装，使得用户仅需关注SQL执行。
+  2. 数据安全
+      用户请求以多线程处理时，为了避免多线程下的数据共享引起的数据混乱，
+      需要将数据连接以ThreadLocal对象传入。
+设计db接口：
+  1.设计原则：
+      根据上层调用者设计简单易用的API接口
+  2. 调用接口
+      1. 初始化数据库连接信息
+          create_engine封装了如下功能:
+              1. 为数据库连接 准备需要的配置信息
+              2. 创建数据库连接(由生成的全局对象engine的 connect方法提供)
+          from transwarp import db
+          db.create_engine(user='root',
+                           password='password',
+                           database='test',
+                           host='127.0.0.1',
+                           port=3306)
+      2. 执行SQL DML (DML：数据库操纵语言)
+          select 函数封装了如下功能:
+              1.支持一个数据库连接里执行多个SQL语句
+              2.支持链接的自动获取和释放
+          使用样例:
+              users = db.select('select * from user')
+              # users =>
+              # [
+              #     { "id": 1, "name": "Michael"},
+              #     { "id": 2, "name": "Bob"},
+              #     { "id": 3, "name": "Adam"}
+              # ]
+      3. 支持事物
+         transaction 函数封装了如下功能:
+             1. 事务也可以嵌套，内层事务会自动合并到外层事务中，这种事务模型足够满足99%的需求
+'''
+
 import threading
 import functools, logging, time, uuid
 
 class  Dict(dict):
 	'''
 	简单的dict，但是支持
-		1、以 x.y 方式来访问 key,value
+		1、支持通过属性访问，即以 x.y 方式来访问 key,value
 		2、支持 Dict(iterable,iterable)方式进行初始化,会自动一一对应生成dict
     >>> d1 = Dict()
     >>> d1['x'] = 100
@@ -55,10 +94,8 @@ class  Dict(dict):
 
 def next_id(t=None):
 	'''
-	    Return next id as 50-char string.
-	    Args:
-	        t: unix timestamp, default to None and using time.time().
-	    '''
+    生成一个唯一id，由  【当前时间戳】+【UUID随机数】 拼接得到
+    '''
 	if t is None:
 		t = time.time()
 	return '%015d%s000' % (int(t * 1000), uuid.uuid4().hex)
@@ -67,7 +104,7 @@ def next_id(t=None):
 
 def _profiling(start, sql=''):
 	'''
-	用于记录 事务处理 所消耗的时间，并记录过于耗时的SQL语句
+	用于剖析sql的执行时间
 	'''
 	t = time.time() - start
 	if t > 0.1:
@@ -88,6 +125,10 @@ class MultiColumnsError(DBError):
 
 
 class _LasyConnection(object):
+	"""
+    惰性连接对象
+    仅当需要cursor对象时，才连接数据库，获取连接
+    """
 
 	def __init__(self):
 		self.connection = None
@@ -114,27 +155,40 @@ class _LasyConnection(object):
 
 
 class _DbCtx(threading.local):
-	'''
-	持有数据库连接的上下文对象
-    Thread local object that holds connection info.
-    '''
+	"""
+    db模块的核心对象, 数据库连接的上下文对象，负责从数据库获取和释放连接
+    取得的连接是惰性连接对象，因此只有调用cursor对象时，才会真正获取数据库连接
+    该对象是一个 Thread local对象，因此绑定在此对象上的数据 仅对本线程可见
+    """
 	def __init__(self):
 		self.connection = None
 		self.transactions = 0
 
 	def is_init(self):
+		"""
+        返回一个布尔值，用于判断 此对象的初始化状态
+        """
 		return self.connection is not None
 
 	def init(self):
+		"""
+        初始化连接的上下文对象，获得一个惰性连接对象
+        """
 		logging.info('open lazy connection...')
 		self.connection = _LasyConnection()
 		self.transactions = 0
 
 	def cleanup(self):
+		"""
+        清理连接对象，关闭连接
+        """
 		self.connection.cleanup()
 		self.connection = None
 
 	def cursor(self):
+		"""
+        获取cursor对象， 真正取得数据库连接
+        """
 		return self.connection.cursor()
 
 
@@ -142,10 +196,15 @@ class _DbCtx(threading.local):
 # _db_ctx是 threadlocal 对象，所以，它持有的数据库连接对于每个线程看到的都是不一样的。任何一个线程都无法访问到其他线程持有的数据库连接。
 _db_ctx = _DbCtx()
 
+
 engine = None
 
-#数据库引擎对象：
+
 class _Engine(object):
+	"""
+	数据库引擎对象
+	用于保存 db模块的核心函数：create_engine 创建出来的数据库连接
+	"""
 	def __init__(self, connect):
 		self._connect = connect
 
@@ -154,6 +213,20 @@ class _Engine(object):
 
 
 def create_engine(user, password, database, host='127.0.0.1', port=3306, **kw):
+	'''
+	db模型的核心函数，用于连接数据库，生成全局对象engine
+	engine对象持有数据库连接
+
+	封装功能：
+		1. 为数据库连接 准备需要的配置信息
+		2. 创建数据库连接（由生成的全局对象engine的 connect方法提供
+	from transwarp import db
+    db.create_engine(user='root',
+					 password='password',
+					 database='test',
+				     host='127.0.0.1',
+				     port=3306)
+	'''
 	import mysql.connector
 	global engine
 	if engine is not None:
@@ -172,19 +245,20 @@ def create_engine(user, password, database, host='127.0.0.1', port=3306, **kw):
 
 #数据库连接的上下文，目的是自动获取和释放连接
 class _ConnectionCtx(object):
-	'''
-	定义了__enter__()和__exit__()的对象可以用于with语句，确保任何情况下__exit__()方法可以被调用。
-
-	把_ConnectionCtx的作用域作用到一个函数调用上，可以这么写：
+	"""
+	因为_DbCtx实现了连接的 获取和释放，但是并没有实现连接
+	的自动获取和释放，_ConnectCtx在 _DbCtx基础上实现了该功能，
+	因此可以对 _ConnectCtx 使用with 语法，比如：
 	with connection():
-     do_some_db_operation()
-	但是更简单的写法是写个@decorator：
-	@with_connection
-	def do_some_db_operation():
-        pass
-	'''
+		pass
+		with connection():
+			pass
+	"""
 
 	def __enter__(self):
+		"""
+		获取一个惰性连接对象
+		"""
 		global _db_ctx
 		self.should_cleanup = False
 		if not _db_ctx.is_init():
@@ -193,6 +267,9 @@ class _ConnectionCtx(object):
 		return self
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
+		"""
+		释放连接
+		"""
 		global _db_ctx
 		if self.should_cleanup:
 			_db_ctx.cleanup()
@@ -200,10 +277,20 @@ class _ConnectionCtx(object):
 
 def connection():
 	'''
-    返回 _ConnectionCtx object，它可以用于 'with' 语法：
+    db模块核心函数，用于获取一个数据库连接
+    通过_ConnectionCtx对 _db_ctx封装，使得惰性连接可以自动获取和释放
+    也就是可以使用with语法来处理数据库连接
 
-    with connection():
-        pass
+    _ConnectionCtx      实现with语法
+    ^
+    |
+    _db_ctx             _DbCtx实例
+    ^
+    |
+    _DbCtx              获取和释放惰性连接, threading.local类
+    ^
+    |
+    _LasyConnection     实现惰性连接
     '''
 	return _ConnectionCtx()
 
@@ -211,11 +298,13 @@ def connection():
 
 def with_connection(func):
 	'''
-	注意到Connection对象是存储在_DbCtx这个threadlocal对象里的，
-	因此，嵌套使用with connection()也没有问题。
-	_DbCtx永远检测当前是否已存在Connection，
-		如果存在，直接使用，
-		如果不存在，则打开一个新的Connection。
+	设计一个装饰器 替换with语法，让代码更优雅
+	比如:
+	    @with_connection
+	    def foo(*args, **kw):
+	        f1()
+	        f2()
+	        f3()
 	'''
 	@functools.wraps(func)
 	def _wrapper(*args, **kw):
@@ -226,12 +315,10 @@ def with_connection(func):
 
 
 class _TransactionCtx(object):
-	'''
-    _TransactionCtx object that can handle transactions.
-
-    with _TransactionCtx():
-        pass
-    '''
+	"""
+	事务嵌套比Connection嵌套复杂一点，因为事务嵌套需要计数，
+	每遇到一层嵌套就+1，离开一层嵌套就-1，最后到0时提交事务
+	"""
 
 	def __enter__(self):
 		global _db_ctx
@@ -277,10 +364,17 @@ class _TransactionCtx(object):
 
 def transaction():
 	'''
-    Create a transaction object so can use with statement:
-
-    with transaction():
-        pass
+	db模块核心函数 用于实现事物功能
+    支持事物:
+        with db.transaction():
+            db.select('...')
+            db.update('...')
+            db.update('...')
+    支持事物嵌套:
+        with db.transaction():
+            transaction1
+            transaction2
+            ...
 
     >>> def update_profile(id, name, rollback):
     ...     u = dict(id=id, name=name, email='%s@test.org' % name, passwd=name, last_modified=time.time())
@@ -304,7 +398,11 @@ def transaction():
 
 def with_transaction(func):
 	'''
-    A decorator that makes function around transaction.
+	设计一个装饰器 替换with语法，让代码更优雅
+    比如:
+        @with_transaction
+        def do_in_transaction():
+
     >>> @with_transaction
     ... def update_profile(id, name, rollback):
     ...     u = dict(id=id, name=name, email='%s@test.org' % name, passwd=name, last_modified=time.time())
@@ -332,7 +430,9 @@ def with_transaction(func):
 
 
 def _select(sql, first, *args):
-	# 执行 select SQL语句，并返回 unique result 或 list result
+	"""
+    执行SQL，返回一个结果 或者多个结果组成的列表
+    """
 	global _db_ctx
 	cursor = None
 	sql = sql.replace('?','%s')
@@ -356,9 +456,11 @@ def _select(sql, first, *args):
 @with_connection
 def select_one(sql, *args):
 	'''
-    Execute select SQL and expected one result.
-    If no result found, return None.
-    If multiple results found, the first one returned.
+    执行SQL 仅返回一个结果
+    如果没有结果 返回None
+    如果有1个结果，返回一个结果
+    如果有多个结果，返回第一个结果
+
     >>> u1 = dict(id=100, name='Alice', email='alice@test.org', passwd='ABC-12345', last_modified=time.time())
     >>> u2 = dict(id=101, name='Sarah', email='sarah@test.org', passwd='ABC-12345', last_modified=time.time())
     >>> insert('user', **u1)
@@ -379,7 +481,9 @@ def select_one(sql, *args):
 @with_connection
 def select_int(sql, *args):
 	'''
-    Execute select SQL and expected one int and only one int result.
+    执行一个sql 返回一个数值，
+    注意仅一个数值，如果返回多个数值将触发异常
+
     >>> n = update('delete from user')
     >>> u1 = dict(id=96900, name='Ada', email='ada@test.org', passwd='A-12345', last_modified=time.time())
     >>> u2 = dict(id=96901, name='Adam', email='adam@test.org', passwd='A-12345', last_modified=time.time())
@@ -410,6 +514,20 @@ def select_int(sql, *args):
 @with_connection
 def select(sql, *args):
 	'''
+	执行sql 以列表形式返回结果
+
+	select 函数封装了如下功能：
+		1. 支持一个数据库连接里执行多个SQL语句
+		2. 支持链接的自动获取和释放
+	使用样例:
+		users = db.select('select * from user')
+		# users =>
+		# [
+		#     { "id": 1, "name": "Michael"},
+		#     { "id": 2, "name": "Bob"},
+		#     { "id": 3, "name": "Adam"}
+		# ]
+
     Execute select SQL and return list or empty list if no result.
     >>> u1 = dict(id=200, name='Wall.E', email='wall.e@test.org', passwd='back-to-earth', last_modified=time.time())
     >>> u2 = dict(id=201, name='Eva', email='eva@test.org', passwd='back-to-earth', last_modified=time.time())
@@ -434,27 +552,31 @@ def select(sql, *args):
 
 @with_connection
 def _update(sql, *args):
-    global _db_ctx
-    cursor = None
-    sql = sql.replace('?', '%s')
-    logging.info('SQL: %s, ARGS: %s' % (sql, args))
-    try:
-        cursor = _db_ctx.connection.cursor()
-        cursor.execute(sql, args)
-        r = cursor.rowcount
-        if _db_ctx.transactions==0:
-            # no transaction enviroment:
-            logging.info('auto commit')
-            _db_ctx.connection.commit()
-        return r
-    finally:
-        if cursor:
-            cursor.close()
+	'''
+    执行update 语句，返回update的行数
+    '''
+	global _db_ctx
+	cursor = None
+	sql = sql.replace('?', '%s')
+	logging.info('SQL: %s, ARGS: %s' % (sql, args))
+	try:
+		cursor = _db_ctx.connection.cursor()
+		cursor.execute(sql, args)
+		r = cursor.rowcount
+		if _db_ctx.transactions==0:
+			# no transaction enviroment:
+			logging.info('auto commit')
+			_db_ctx.connection.commit()
+		return r
+	finally:
+		if cursor:
+			cursor.close()
 
 
 def insert(table, **kw):
 	'''
-    Execute insert SQL.
+    执行insert语句
+
     >>> u1 = dict(id=2000, name='Bob', email='bob@test.org', passwd='bobobob', last_modified=time.time())
     >>> insert('user', **u1)
     1
@@ -479,7 +601,8 @@ def insert(table, **kw):
 
 def update(sql, *args):
 	r'''
-    Execute update SQL.
+    执行update 语句，返回update的行数
+
     >>> u1 = dict(id=1000, name='Michael', email='michael@test.org', passwd='123456', last_modified=time.time())
     >>> insert('user', **u1)
     1

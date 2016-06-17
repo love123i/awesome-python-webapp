@@ -1,0 +1,86 @@
+
+#模块基础
+^
+|--class Field()
+|	|	|#数据库中表的 字段属性 的基类
+|	|	|->_count			#类属性，每实例化一次，该值就+1
+|	|	|->self._order		#实例属性，实例化时从类属性处得到，用于记录 该实例是 该类的第几个实例
+|	|	|->self._default	#用于让orm自己填入缺省值，缺省值可以是 可调用对象，比如函数
+|	|	|
+|	|	|->def __str__()	#返回表示该字段属性的字符串(便于print)
+|	|
+|	|  #default=''	ddl='varchar(255)'
+|	|->class StringField(Field)		#保存String类型字段的属性
+|	|
+|	|  #default=0	ddl='bigint'
+|	|->class IntegerField(Field)	#保存Integer类型字段的属性
+|	|
+|	|  #default='0.0'	ddl='real'
+|	|->class FloatField(Field)		#保存Float类型字段的属性
+|	|
+|	|  #default='False'	ddl='bool'
+|	|->class BooleanField(Field)	#保存BooleanField类型字段的属性
+|	|
+|	|  #default=''	ddl='text'
+|	|->class TextField(Field)		#保存Text类型字段的属性
+|	|
+|	|  #default=''	ddl='blob'
+|	|->class BlobField(Field)		#保存Blob类型字段的属性
+|	|
+|	|  #default=0	ddl='bigint'
+|	|->class VersionField(Field)	#保存Version类型字段的属性
+|
+|
+|--class Model(dict)	# 已实现 __getattr__ 、 __setattr__
+	|	|# 一个基类: 用户在子类中 定义映射关系【表==>类    行==>类的实例】, 因此我们需要动态扫描子类属性
+	|	|
+	|	|--	__metaclass__ = ModelMetaclass
+	|	|	|# 从子类中扫描【表名、字段对象Field、主键Field】
+	|	|	|->	__table__			#表名
+	|	|	|->	__mappings_			#字段对象(字段的所有属性，见Field类)
+	|	|	|->	__primary_key__		#主键字段
+	|	|	|->	__sql__				#创建表时执行的sql
+	|	|
+	|	|--# 封装各种表操作 ———— 实例 方法
+	|	|
+	|	|	|->def update()			# 调用db.update('update ... set ... where ...')
+	|	|	|
+	|	|	|->def delete()			# 调用db.update('delete from ... where ...)
+	|	|	|
+	|	|	|->def insert()			# 调用db.insert(...)	'insert into ... (...) values (...)'
+	|	|
+	|	|
+	|	|--# 封装各种表操作 ———— 类   方法
+	|		|	@classmethod
+	|		|->def get(cls, pk)						# 调用db.select_one('select * from ... where ...')
+	|		|
+	|		|->def find_first(cls, where, *args)	# 调用db.select_one('select * from ... where ...)
+	|		|
+	|		|->def find_all(cls)					# 调用db.select('select * from ...')
+	|		|
+	|		|->def find_by(cls, where, *args)		# 调用db.sekect('select * from ... where ...')
+	|		|
+	|		|->def count_all(cls)					# 调用db.select_int('select count(...) from ...')
+	|		|
+	|		|->def count_by(cls, where, *args)		# 调用db.select_int('select count(...) from ... where ...')|	|	|	|
+	|
+	|->class ModelMetaclass(type)
+		|
+		|->def __new__(cls, name, bases, attrs)
+			'''
+			对类对象动态完成以下操作
+			避免修改Model类：
+				1.排除对Model类的修改
+			属性与字段的mapping：
+				1.从类的属性字典中提取出 类属性和字段类 的mapping
+				2. 提取完成后移除这些类属性，避免和实例属性冲突
+				3. 新增"__mappings__" 属性，保存提取出来的mapping数据
+			类和表的mapping：
+				1. 提取类名，保存为表名，完成简单的类和表的映射
+				2. 新增"__table__"属性，保存提取出来的表名
+			'''
+
+
+#模块内部工具
+^
+|--def _gen_sql(table_name, mappings)	#类 ==> 表时 生成创建表的sql

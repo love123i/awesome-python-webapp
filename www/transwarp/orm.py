@@ -84,6 +84,11 @@ class Field(object):
 	@property
 	def default(self):
 		'''
+		给一个Field增加一个default参数可以让ORM自己填入缺省值，非常方便。
+			缺省值可以作为函数对象传入，在调用insert()时自动计算。
+				例如，主键id的缺省值是函数next_id，
+					 创建时间created_at的缺省值是函数time.time，可以自动设置当前日期和时间。
+
 		利用getter实现的一个写保护的 实例属性
 		'''
 		d = self._default
@@ -306,7 +311,7 @@ class ModelMetaclass(type):
 		for k in mappings.iterkeys():
 			attrs.pop(k)
 		# 若 类没有定义 __table__,则默认其类名为表名
-		if not '__talbe__' in attrs:
+		if not '__table__' in attrs:
 			attrs['__table__'] = name.lower()
 		#给cls增加一些字段:
 		attrs['__mappings__'] = mappings

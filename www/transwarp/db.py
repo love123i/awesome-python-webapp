@@ -154,7 +154,7 @@ class _LasyConnection(object):
 			connection.close()
 
 
-class _DbCtx(threading.local):
+class (threading.local):
 	"""
     db模块的核心对象, 数据库连接的上下文对象，负责从数据库获取和释放连接
     取得的连接是惰性连接对象，因此只有调用cursor对象时，才会真正获取数据库连接
@@ -590,6 +590,7 @@ def insert(table, **kw):
     '''
 	cols, args = zip(*kw.iteritems())
 	sql = 'insert into `%s` (%s) values (%s)' % (table, ','.join(['`%s`' % col for col in cols]), ','.join(['?' for i in range(len(cols))]))
+	print 'insert: %s, args: %s' % (sql,args)
 	result = _update(sql, *args)
 
 	logging.info('[insert] sql= %s, args= %s,result= %s' % (sql, args, result))

@@ -1,0 +1,55 @@
+
+# 启动流程
+^
+|--WSGIApplication
+|	|
+|	|->def run()	# 服务运行的入口,启动python自带的WSGI Server
+|	|->def get_wsgi_application()	# 返回WSGI处理函数(即WSGI服务器加载的application函数)
+|	|		|
+|	|		|-->def fn_route()	# Step2、根据请求的 path_info , 寻找 动态、静态route, 并访问与之映射的函数
+|	|		|		!!!!这部分及 Route 部分的都一片晕乎乎的, 需要找时间回来搞定!!!!
+|	|		|
+|	|		|
+|	|		|-->fn_exec = _build_interceptor_chain(fn_route, *self._interceptors)  # 创建拦截器链, 防止客户端直接访问应该被限制的路径, 等同对 fn_route 进行了封装，外层是一层一层的拦截器
+|	|		|-->def wsgi	# get_wsgi_application()所返回的函数, 即具体的 application
+|	|			|# fn_exec() Step1、2
+|	|			|-->1、使用拦截器 fn_exec 对访问的 path_info 进行拦截
+|	|			|-->2、执行 path_info 所映射的函数
+|	|			|-->3、根据返回的结果, 若是模板则使用 模板引擎 进行渲染
+|	|			|-->4、调用WSGI的 start_response 返回 http 头部信息, 并return body内容
+|	|			|#若 catch 到 exception:
+|	|			|-->#RedirectError
+|	|			|-->#HttpError
+|	|			|-->#Exception
+|	|
+|	|->def _check_not_running()	# 判断服务是否在运行(防止运行时修改参数)
+
+# 内部基础模块
+^
+|
+|--class Request()	#请求对象，用于获取所有Http请求信息(使用WSGI传来的 enviro 来初始化该类)
+|
+|--ctx = threading.local()	# 全局Threadlocal对象, 实现 request 数据和 response 数据的存储
+|	|
+|	|--ctx.application		# Dict对象, 存储 application 数据？？具体？
+|	|--ctx.request			# 存储Request对象
+|	|--ctx.response			# 存储Response对象
+|
+|--def _build_interceptor_chain(last_fn, *interceptors)	# last_fn最终待执行的函数, *interceptors 是所有应用到的拦截器
+
+
+
+# 支持特性
+^
+|  # 拦截器
+|--@def interceptor(pattern='/')
+|		|# def _decorator(func)
+|		|-- func.__interceptor__ = _build_pattern_fn(pattern)
+|
+|--@def get
+|
+|--@def post
+
+# 疑难点
+|
+|--# 

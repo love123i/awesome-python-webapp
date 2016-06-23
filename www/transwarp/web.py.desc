@@ -7,7 +7,10 @@
 |	|->def get_wsgi_application()	# 返回WSGI处理函数(即WSGI服务器加载的application函数)
 |	|		|
 |	|		|-->def fn_route()	# Step2、根据请求的 path_info , 寻找 动态、静态route, 并访问与之映射的函数
-|	|		|		!!!!这部分及 Route 部分的都一片晕乎乎的, 需要找时间回来搞定!!!!
+|	|		|		|  !!!!这部分及 Route 部分的都一片晕乎乎的, 需要找时间回来搞定!!!!
+|	|		|		|-># 根据 request的 path_info(eg./、/test), 以及request_method(eg.GET、POST)，从字典 _get_static、_post_static、_get_dynamic、_post_dynamic 中获取到所需的对应的处理函数
+|	|		|		|-># 上述若是 dynamic类型(即含有动态参数传入),则使用预定义的正则式解析并获取传来的参数值,
+|	|		|		|-># 执行对应处理函数(有动态参数记得传入), 返回运行结果(可能是 dict类型，会被装饰器自动转换成Template)
 |	|		|
 |	|		|
 |	|		|-->fn_exec = _build_interceptor_chain(fn_route, *self._interceptors)  # 创建拦截器链, 防止客户端直接访问应该被限制的路径, 等同对 fn_route 进行了封装，外层是一层一层的拦截器
@@ -23,6 +26,8 @@
 |	|			|-->#Exception
 |	|
 |	|->def _check_not_running()	# 判断服务是否在运行(防止运行时修改参数)
+|	|
+|	|->def add_module(mod)	# 对 mod模块(Python中的模块概念)中的 使用@def @post 装饰过的函数, 调用 self.add_url(...)来添加该url( 转换为Route类型, 根据 method、is_static属性来判断保存到字典 _get_static、_post_static、_get_dynamic、_post_dynamic 其中之一)
 
 # 内部基础模块
 ^

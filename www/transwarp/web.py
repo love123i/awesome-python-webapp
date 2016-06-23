@@ -608,7 +608,7 @@ class Route(object):
         func： 方法装饰器里定义的函数
         """
         self.path = func.__web_route__
-        self.method = func.__method__
+        self.method = func.__web_method__
         self.is_static = _re_route.search(self.path) is None
         if not self.is_static:
             self.route = re.compile(_build_regex(self.path))
@@ -1592,7 +1592,7 @@ class WSGIApplication(object):
             if route.method =='GET':
                 self._get_static[route.path] = route
             if route.method =='POST':
-                self._port_static[route.path] = route
+                self._post_static[route.path] = route
         else:
             if route.method=='GET':
                 self._get_dynamic.append(route)

@@ -154,7 +154,7 @@ class _LasyConnection(object):
             connection.close()
 
 
-class (threading.local):
+class _DbCtx(threading.local):
     """
     db模块的核心对象, 数据库连接的上下文对象，负责从数据库获取和释放连接
     取得的连接是惰性连接对象，因此只有调用cursor对象时，才会真正获取数据库连接

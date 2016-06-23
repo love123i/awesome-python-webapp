@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-# config.py
 # encoding:utf-8
+# config.py
+
 __author__ = 'YJX'
 __data__ = 2016 / 6 / 23
 

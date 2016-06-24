@@ -665,8 +665,10 @@ class StaticFileRoute(object):
         return None
 
     def __call__(self, *args):
-        fpath = os.path.join(ctx.application.document_root, args[0])
+        #print 'StaticFileRoute args: %s' % args
+        fpath = os.path.join(os.path.dirname(ctx.application.document_root), args[0])
         if not os.path.isfile(fpath):
+            #print 'StaticFileRoute "can\'t not found: %s"' % fpath
             raise notfound()
         fext = os.path.splitext(fpath)[1]
         ctx.response.content_type = mimetypes.types_map.get(fext.lower(), 'application/octet-stream')
@@ -1632,13 +1634,16 @@ class WSGIApplication(object):
         def fn_route():
             request_method = ctx.request.request_method
             path_info = ctx.request.path_info
+            #print 'Receive: %s %s' % (request_method,path_info)
             if request_method=='GET':
                 fn = self._get_static.get(path_info, None)
                 if fn:
+                    #print 'GET from static'
                     return fn()
                 for fn in self._get_dynamic:
                     args = fn.match(path_info)
                     if args:
+                        #print 'GET from dynamic'
                         return fn(*args)
                 raise notfound()
             if request_method=='POST':

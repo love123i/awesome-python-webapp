@@ -445,7 +445,7 @@ class Model(dict):
         """
         通过where语句进行条件查询，将结果以一个列表返回
         """
-        L = db.select('select * from `%s` %s', (cls.__table__, where), *args)
+        L = db.select('select * from `%s` %s' % (cls.__table__, where), *args)
         return [cls(**d) for d in L]
 
     @classmethod

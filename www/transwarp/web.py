@@ -808,7 +808,7 @@ class Request(object):
 
     def input(self, **kw):
         '''
-                返回一个由传入的数据和从environ里取出的数据 组成的Dict对象，Dict对象的定义 见db模块
+        返回一个由传入的数据和从environ里取出的数据 组成的Dict对象，Dict对象的定义 见db模块
         Get input as dict from request, fill dict using provided default value if key not exist.
         i = ctx.request.input(role='guest')
         i.role ==> 'guest'

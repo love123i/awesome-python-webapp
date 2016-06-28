@@ -40,7 +40,7 @@ def signin():
     return dict()
 
 
-@get('/sigout')
+@get('/signout')
 def sigout():
     ctx.response.delete_cookie(_COOKIE_NAME)
     raise seeother('/')

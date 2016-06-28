@@ -1,0 +1,70 @@
+{% extends '__base__.html' %}
+
+{% block title %}编辑日志{% endblock %}
+
+{% block beforehead %}
+
+<script>
+var
+    action = '{{ action }}',
+    redirect = '{{ redirect }}';
+
+var vm;
+
+$(function () {
+    vm = new Vue({
+        // el: 根据选择器查找绑定的View，这里是#form-blog，就是id为form-blog的DOM，对应的是一个<form>标签
+        el:'#form-blog',
+        // data: JavaScript对象表示的Model，我们初始化为{ name: '', summary: '', content: ''}；
+        data:{
+            name:'',
+            summary:'',
+            content:''
+        },
+        // methods：View可以触发的JavaScript函数，submit就是提交表单时触发的函数。
+        methods:{
+            submit:function (event) {
+                event.preventDefault();
+                postApi(action, this.$data, function(err, r){
+                    if (err){
+                        alert('Failed:' + err)
+                    }
+                    else{
+                        alert('保存成功!');
+                        return location.assign(redirect);
+                    }
+                });
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="uk-width-1-1">
+    <!-- Form表单通过<form v-on="submit: submit">把提交表单的事件关联到submit方法 -->
+    <form id="form-blog" v-on="submit: submit" class="uk-form uk-form-stacked">
+        <!-- 在<form>标签中，用几个简单的v-model，就可以让Vue把Model和View关联起来 -->
+        <div class="uk-form-row">
+            <div class="uk-form-controls">
+                <!-- input的value和Model的name关联起来了 -->
+                <input v-model="name" class="uk-width-1-1">
+            </div>
+        </div>
+        <div class="uk-form-row">
+            <div class="uk-form-controls">
+                <textarea v-model="summary" rows="4" class="uk-width-1-1"></textarea>
+            </div>
+        </div>
+        <div class="uk-form-row">
+            <div class="uk-form-controls">
+                <textarea v-model="content" rows="8" class="uk-width-1-1"></textarea>
+            </div>
+        </div>
+        <div class="uk-form-row">
+            <button type="submit" class="uk-button uk-button-primary">保存</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

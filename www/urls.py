@@ -26,26 +26,6 @@ def test_users():
     return dict(users=users)
 
 
-@view('blogs.html')
-@get('/')
-def index():
-    blogs = Blog.find_all()
-    return dict(blogs=blogs, user=ctx.request.user)
-
-
-@view('signin.html')
-@get('/signin')
-def signin():
-    print 'GET /signin'
-    return dict()
-
-
-@get('/signout')
-def sigout():
-    ctx.response.delete_cookie(_COOKIE_NAME)
-    raise seeother('/')
-
-
 @api
 @post('/api/users')
 def register_user():
@@ -133,6 +113,7 @@ def check_admin():
     user = ctx.request.user
     if user and user.admin:
         return
+    print 'No Admin Permission!!!'
     raise APIPermissionError('No Permission.')
 
 @interceptor('/')
@@ -148,10 +129,60 @@ def user_interceptor(next):
     ctx.request.user = user
     return next()
 
-@interceptor('/manager')
+
+
+@view('blogs.html')
+@get('/')
+def index():
+    blogs = Blog.find_all()
+    return dict(blogs=blogs, user=ctx.request.user)
+
+
+@view('signin.html')
+@get('/signin')
+def signin():
+    print 'GET /signin'
+    return dict()
+
+
+@get('/signout')
+def sigout():
+    ctx.response.delete_cookie(_COOKIE_NAME)
+    raise seeother('/')
+
+
+@interceptor('/manage/')
 def manage_interceptor(next):
+    print 'interceptor /manage'
     user = ctx.request.user
     if user and user.admin:
         return next()
     raise seeother('/signin')
 
+
+@view('manage_blog_edit.html')
+@get('/manage/blogs/create')
+def manage_blogs_create():
+    return dict(id=None, action='/api/blogs', redirect='/', user=ctx.request.user)
+
+
+@api
+@post('/api/blogs')
+def api_create_blog():
+    print 'POST: /api/blogs | def api_create_blog()'
+    check_admin()
+    i = ctx.request.input(name='', summary='', content='')
+    name = i.name.strip()
+    summary = i.summary.strip()
+    content = i.content.strip()
+    if not name:
+        raise APIValueError('name', 'name cannot be empty.')
+    if not summary:
+        raise APIValueError('summary', 'summary cannot be empty.')
+    if not content:
+        raise APIValueError('content', 'content cannot be empty.')
+    user = ctx.request.user
+    blog = Blog(user_id=user.id, user_name=user.name, name=name, summary=summary, content=content)
+    blog.insert()
+    print 'blog.insert: %s' % blog
+    return blog

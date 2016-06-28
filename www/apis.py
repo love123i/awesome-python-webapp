@@ -66,6 +66,7 @@ def api(func):
         try:
             r = dumps(func(*args,**kw))
         except APIError, e:
+            logging.exception(e)
             r = json.dumps(dict(error=e.error, data=e.data, message=e.message))
         except Exception, e:
             logging.exception(e)

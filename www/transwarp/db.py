@@ -42,6 +42,44 @@ __data__ = 2016 / 6 / 13
              1. 事务也可以嵌套，内层事务会自动合并到外层事务中，这种事务模型足够满足99%的需求
 '''
 
+''' 一次数据库 查询/操作 的过程
+1、连接到数据库  connect = mysql.connector.connect('数据库连接参数')
+2、获取cursor   cursor =  connect.cursor()
+3、执行sql语句  result = cursor.execute('sql语句', 'sql语句中的参数的值')
+4、关闭连接     cursor.close();  connect.close()
+'''
+
+'''
+_Engine 是数据库连接的生成持有者，相当于：一个数据库连接的 生产工厂
+^    预先设置好数据库连接参数，后续只需调用其 生产 函数，即可获得一个  数据库连接
+|
+|
+_LasyConnection 是对数据库底层的封装，该对象由 _DbCtx持有
+^    提供：1、获取Cursor：connection=engine.connect();     return connection.cursor()
+|         2、提交Commit：connection.commit()
+|         3、回滚rollback：connection.rollback()
+|         4、关闭连接： connection.close()
+|
+|
+_DbCtx(threading.local) 是数据库连接的上下文对象
+^    其实它仅仅是1、对 _LasyConnection 的封装
+|              2、额外提供多线程访问的能力 （类继承自 threading.local）
+|
+|
+_ConnectionCtx  调用 _DbCtx，提供 with 语法
+    __enter__：_db_ctx.init()    # 初始化_DbCtx，获取_LasyConnection对象
+    __exit__： _db_ctx.cleanup() # 调用其持有的_LasyConnection对象的数据库连接关闭函数
+
+
+_update()   # _insert 实际是构造 update语句，最终还是调用 _update()
+    先获取cursor，执行sql语句，返回 cursor.rowcount
+
+
+_select()
+    先获取cursor，执行sql语句，返回 cursor.fetchone() 或 cursor.fetchall()
+
+'''
+
 import threading
 import functools, logging, time, uuid
 

@@ -555,13 +555,16 @@ _re_route = re.compile(r'(\:[a-zA-Z_]\w*)')
 def _build_regex(path):
     r'''
     用于将路径转换成正则表达式，并捕获其中的参数
-
+    (?P<name>...)
+        其中 ?P<name> 表示命令组（提供方便记住的名字来访问捕获到的内容，而不是使用记不住的数字）
+        命令组的语法是Python专用扩展之一
+    / 和 \ 在正则中好像都有特殊用途，因此匹配时需要转义
     >>> _build_regex('/path/to/:file')
-    '^\\/path\\/to\\/(?P<file>[^\\/]+)$'
+    '^\/path\/to\/(?P<file>[^\/]+)$'
     >>> _build_regex('/:user/:comments/list')
-    '^\\/(?P<user>[^\\/]+)\\/(?P<comments>[^\\/]+)\\/list$'
+    '^\/(?P<user>[^\/]+)\/(?P<comments>[^\/]+)\/list$'
     >>> _build_regex(':id-:pid/:w')
-    '^(?P<id>[^\\/]+)\\-(?P<pid>[^\\/]+)\\/(?P<w>[^\\/]+)$'
+    '^(?P<id>[^\/]+)\-(?P<pid>[^\/]+)\/(?P<w>[^\/]+)$'
     '''
     re_list = ['^']
     var_list = []

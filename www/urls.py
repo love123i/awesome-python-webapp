@@ -6,10 +6,11 @@ __author__ = 'YJX'
 __data__ = 2016 / 6 / 23
 
 from transwarp.web import get, post, view, ctx, interceptor, seeother, notfound
-from apis import api, APIError, APIPermissionError, APIResourceNotFoundError, APIValueError
+from apis import Page, api, APIError, APIPermissionError, APIResourceNotFoundError, APIValueError
 from models import User, Blog, Comment
 import re, hashlib, time, logging
 from config import configs
+import markdown2
 
 _RE_EMAIL = re.compile(r'^[a-z0-9\.\-\_]+\@[a-z0-9\-\_]+(\.[a-z0-9\-\_]+){1,4}$')
 _RE_MD5 = re.compile(r'^[0-9a-f]{32}$')
@@ -130,6 +131,37 @@ def user_interceptor(next):
     return next()
 
 
+def _get_page_index():
+    page_index = 1
+    try:
+        page_index = int(ctx.request.get('page',1))
+    except ValueError:
+        pass
+    return page_index
+
+def _get_blogs_by_page():
+    total = Blog.count_all()
+    page = Page(total, _get_page_index())
+    blogs = Blog.find_by('order by created_at desc limit ?,?', page.offset, page.limit)
+    return blogs, page
+
+
+@api
+@get('/api/blogs')
+def api_get_blogs():
+    format = ctx.request.get('format','')
+    blogs, page = _get_blogs_by_page()
+    if format == 'html':
+        for blog in blogs:
+            blog.content = markdown2.markdown(blog.content)
+    return dict(blogs=blogs, page=page)
+
+
+@view('manage_blog_list.html')
+@get('/manage/blogs')
+def manage_blogs():
+    return dict(page_index=_get_page_index(), user=ctx.request.user)
+
 
 @view('blogs.html')
 @get('/')
@@ -163,7 +195,7 @@ def manage_interceptor(next):
 @view('manage_blog_edit.html')
 @get('/manage/blogs/create')
 def manage_blogs_create():
-    return dict(id=None, action='/api/blogs', redirect='/', user=ctx.request.user)
+    return dict(id=None, action='/api/blogs', redirect='/manage/blogs', user=ctx.request.user)
 
 
 @api

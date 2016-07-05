@@ -1710,12 +1710,6 @@ class WSGIApplication(object):
         return wsgi
 
 
-'''
-if __name__ == '__main__':
-    sys.path.append('.')
-    import doctest
-    doctest.testmod()
-'''
 if __name__ == '__main__':
     sys.path.append('.')
     import doctest
@@ -1725,5 +1719,3 @@ if __name__ == '__main__':
     template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
     app.template_engine = Jinja2TemplateEngine(template_path)
     app.run()
-else:
-    app = WSGIApplication()

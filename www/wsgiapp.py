@@ -47,3 +47,5 @@ wsgi.add_module(urls)
 # 在9000端口上启动本地测试服务器
 if __name__ == '__main__':
     wsgi.run(9000)
+else:
+    application = wsgi.get_wsgi_application()
